@@ -22,10 +22,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - userName: q215613905
+          - userName: mojiyu
+            upstreamAuthor: q215613905
             repoName: TVBoxOS
             branchName: main
-          - userName: takagen99
+          - userName: mojiyu
+            upstreamAuthor: takagen99
             repoName: Box
             branchName: main
             java_ver: 17
@@ -59,7 +61,7 @@ jobs:
         working-directory: TVBoxOSC
         run: |
           echo '修改VersionName'
-          if [ "${{ matrix.userName }}" == "takagen99" ]; then
+          if [ "${{ matrix.upstreamAuthor }}" == "takagen99" ]; then
             # 进行 sed 修改
             sed -i 's/\.concat(buildTime())/ +\"${{ env.tag }}\"/g' app/build.gradle 
             # 目前关于页面没有合并我的分支
@@ -82,14 +84,14 @@ jobs:
           tar -cJf sourceCode-${{ env.commitS }}.tar.xz --exclude=.git --exclude=.github *
       
       - name: Setup Python
-        #if: ${{ matrix.userName == 'q215613905' && env.commit }}
+        #if: ${{ matrix.upstreamAuthor == 'q215613905' && env.commit }}
         if: ${{ env.commit }}
         uses: actions/setup-python@v7
         with:
           python-version: '3.8'
 
       - name: Install Python dependencies
-        #if: ${{ matrix.userName == 'q215613905' && env.commit }}
+        #if: ${{ matrix.upstreamAuthor == 'q215613905' && env.commit }}
         if: ${{ env.commit }}
         run: |
           python -m pip install --upgrade pip
@@ -104,7 +106,7 @@ jobs:
           sed -i '/buildPython.*python.exe/d' pyramid/build.gradle
 
       - name: Setup Python local.properties
-        #if: ${{ matrix.userName == 'q215613905' && env.commit }}
+        #if: ${{ matrix.upstreamAuthor == 'q215613905' && env.commit }}
         if: ${{ env.commit }}
         working-directory: TVBoxOSC
         run: echo "" > local.properties 
@@ -147,9 +149,9 @@ jobs:
             base=$(basename "$file")
             # 如果文件是 TVBox_ 开头
             if [[ "$base" == TVBox_* ]]; then
-              new_base=$(echo "$base" | sed "s/release/${{ matrix.userName }}_${{ env.tag }}/")
+              new_base=$(echo "$base" | sed "s/release/${{ matrix.userName }}_${{ matrix.repoName }}_${{ env.tag }}/")
             else
-              new_base="TVBox_${{ matrix.userName }}_${{ env.tag }}.apk"
+              new_base="TVBox_${{ matrix.userName }}_${{ matrix.repoName }}_${{ env.tag }}.apk"
             fi
             # 移动并重命名文件
             mv "$file" "apk/$new_base"
@@ -161,13 +163,13 @@ jobs:
         run: |
           lastCommit=$(grep "${{ matrix.userName }}\/${{ matrix.repoName }}" ${{ github.workspace }}/README.md |grep -o '[a-z0-9]\{40\}')
           export LESSCHARSET=utf-8
-          echo -e "Credit: [${{ matrix.userName }}](${{ env.upStream }})\nCommit: ${{ env.commit }}\nChangelog:\n\`\`\`" > apk/${{ matrix.userName }}-Release.log
+          echo -e "Credit: [${{ matrix.upstreamAuthor }}](https://github.com/${{ matrix.upstreamAuthor }}/${{ matrix.repoName }})\nSource: ${{ env.upStream }}\nCommit: ${{ env.commit }}\nChangelog:\n\`\`\`" > apk/${{ matrix.repoName }}-Release.log
           if [ "${{ env.commit }}" == "${lastCommit}" ]; then
-            git log --pretty=format:%B ${{ env.commitS }} -1 |sed -e "s# \{2,\}#\n#g" -e "/^Merge \(pull\|branch\|remote\)/d" -e '/^$/d' |cat -n |sort -k2,2 -k1,1n |uniq -f1 |sort -k1,1n |cut -f2- >> apk/${{ matrix.userName }}-Release.log
+            git log --pretty=format:%B ${{ env.commitS }} -1 |sed -e "s# \{2,\}#\n#g" -e "/^Merge \(pull\|branch\|remote\)/d" -e '/^$/d' |cat -n |sort -k2,2 -k1,1n |uniq -f1 |sort -k1,1n |cut -f2- >> apk/${{ matrix.repoName }}-Release.log
           else
-            git log --pretty=format:%B ${{ env.commitS }}...${lastCommit:0:7} |sed -e "s# \{2,\}#\n#g" -e "/^Merge \(pull\|branch\|remote\)/d" -e '/^$/d' |cat -n |sort -k2,2 -k1,1n |uniq -f1 |sort -k1,1n |cut -f2- >> apk/${{ matrix.userName }}-Release.log
+            git log --pretty=format:%B ${{ env.commitS }}...${lastCommit:0:7} |sed -e "s# \{2,\}#\n#g" -e "/^Merge \(pull\|branch\|remote\)/d" -e '/^$/d' |cat -n |sort -k2,2 -k1,1n |uniq -f1 |sort -k1,1n |cut -f2- >> apk/${{ matrix.repoName }}-Release.log
           fi
-          echo -e '\n```' >> apk/${{ matrix.userName }}-Release.log
+          echo -e '\n```' >> apk/${{ matrix.repoName }}-Release.log
       - name: Upload App To Artifact
         uses: actions/upload-artifact@v7
         if: ${{ env.commit }}
@@ -183,9 +185,9 @@ jobs:
         uses: ncipollo/release-action@v1
         if: ${{ env.commit }}
         with:
-          name: ${{ env.tag }}
-          tag: ${{ env.tag }}
-          bodyFile: TVBoxOSC/apk/${{ matrix.userName }}-Release.log
+          name: ${{ matrix.repoName }}-${{ env.tag }}
+          tag: ${{ matrix.repoName }}-${{ env.tag }}
+          bodyFile: TVBoxOSC/apk/${{ matrix.repoName }}-Release.log
           allowUpdates: true
           removeArtifacts: true
           artifacts: |
@@ -205,8 +207,8 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
           if [ -n "${{ secrets.BOT_TOKEN }}" ]; then
-            sed -i -e '1s/\[\(.*\)\].*/#\1/' -e 's#\([&"\/]\)#\\\1#g' apk/${{ matrix.userName }}-Release.log
-            mv -f apk/${{ matrix.userName }}-Release.log caption.txt
+            sed -i -e '1s/\[\(.*\)\].*/#\1/' -e 's#\([&"\/]\)#\\\1#g' apk/${{ matrix.repoName }}-Release.log
+            mv -f apk/${{ matrix.repoName }}-Release.log caption.txt
             chmod +x telegram-bot-api-binary
             ./telegram-bot-api-binary --api-id=21724 --api-hash=3e0cb5efcd52300aec5994fdfc5bdc16 --local 2>&1 > /dev/null &
             mv ../.github/scripts/upload.py ./
